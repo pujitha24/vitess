@@ -376,6 +376,10 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 				// Notify the buffer after we retried.
 				defer retryDone()
 				bufferedOnce = true
+				// The failover may have ended with the same primary serving
+				// again (e.g. a failed PlannedReparentShard), so tablets that
+				// rejected the query before buffering are candidates again.
+				clear(invalidTablets)
 			}
 
 			if bufferErr != nil {
