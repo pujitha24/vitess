@@ -915,6 +915,12 @@ func (c *CreateTableEntity) normalizeKeys() {
 
 	// let's ensure all keys have names
 	keyNameExists := map[string]bool{}
+	// an inline UNIQUE on a column creates a key named after the column
+	for _, col := range c.TableSpec.Columns {
+		if isInlineUniqueKey(col) {
+			keyNameExists[col.Name.Lowered()] = true
+		}
+	}
 	// first, we iterate and take note for all keys that do already have names
 	for _, key := range c.TableSpec.Indexes {
 		if name := key.Info.Name.Lowered(); name != "" {
@@ -2764,6 +2770,11 @@ func (c *CreateTableEntity) columnsCoveredByInOrderIndex(columns sqlparser.Colum
 	return len(c.indexesCoveringForeignKeyColumns(columns)) > 0
 }
 
+// isInlineUniqueKey returns true if the column is defined with an inline UNIQUE [KEY].
+func isInlineUniqueKey(col *sqlparser.ColumnDefinition) bool {
+	return col.Type.Options != nil && (col.Type.Options.KeyOpt == sqlparser.ColKeyUnique || col.Type.Options.KeyOpt == sqlparser.ColKeyUniqueKey)
+}
+
 func (c *CreateTableEntity) validateDuplicateKeyNameError() error {
 	keyNames := map[string]bool{}
 	for _, key := range c.TableSpec.Indexes {
@@ -2772,6 +2783,26 @@ func (c *CreateTableEntity) validateDuplicateKeyNameError() error {
 			return &DuplicateKeyNameError{Table: c.Name(), Key: name.String()}
 		}
 		keyNames[name.Lowered()] = true
+	}
+	// an inline UNIQUE on a column creates a key named after the column
+	for _, col := range c.TableSpec.Columns {
+		if isInlineUniqueKey(col) && keyNames[col.Name.Lowered()] {
+			return &DuplicateKeyNameError{Table: c.Name(), Key: col.Name.String()}
+		}
+	}
+	return nil
+}
+
+// validateSingleAutoIncrementColumn validates that the table has at most one AUTO_INCREMENT column.
+func (c *CreateTableEntity) validateSingleAutoIncrementColumn() error {
+	count := 0
+	for _, col := range c.TableSpec.Columns {
+		if col.Type.Options != nil && col.Type.Options.Autoincrement {
+			count++
+		}
+	}
+	if count > 1 {
+		return &MultipleAutoIncrementColumnsError{Table: c.Name()}
 	}
 	return nil
 }
@@ -2883,6 +2914,9 @@ func (c *CreateTableEntity) validate() error {
 	}
 	// validate no two keys have same name
 	if err := c.validateDuplicateKeyNameError(); err != nil {
+		return err
+	}
+	if err := c.validateSingleAutoIncrementColumn(); err != nil {
 		return err
 	}
 

@@ -230,6 +230,14 @@ func (e *DuplicateKeyNameError) Error() string {
 	return fmt.Sprintf("duplicate key %s in table %s", sqlescape.EscapeID(e.Key), sqlescape.EscapeID(e.Table))
 }
 
+type MultipleAutoIncrementColumnsError struct {
+	Table string
+}
+
+func (e *MultipleAutoIncrementColumnsError) Error() string {
+	return fmt.Sprintf("there can be only one auto column in table %s", sqlescape.EscapeID(e.Table))
+}
+
 func (e *InvalidColumnInKeyError) Error() string {
 	return fmt.Sprintf("invalid column %s referenced by key %s in table %s",
 		sqlescape.EscapeID(e.Column), sqlescape.EscapeID(e.Key), sqlescape.EscapeID(e.Table))

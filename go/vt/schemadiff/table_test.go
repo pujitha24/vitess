@@ -2600,6 +2600,30 @@ func TestValidate(t *testing.T) {
 			expectErr: &DuplicateKeyNameError{Table: "t", Key: "PRIMARY"},
 		},
 		{
+			name:      "invalid table definition: inline unique and named key with the same name",
+			from:      "create table t (a int unique, b int, unique key a (b))",
+			alter:     "alter table t engine=innodb",
+			expectErr: &DuplicateKeyNameError{Table: "t", Key: "a"},
+		},
+		{
+			name:  "inline unique and unnamed key on the same column",
+			from:  "create table t (a int unique, b int, key (a))",
+			alter: "alter table t engine=innodb",
+			to:    "create table t (a int unique, b int, key a_2 (a))",
+		},
+		{
+			name:      "invalid table definition: two auto_increment columns",
+			from:      "create table t (a int auto_increment, b int auto_increment, key(a), key(b))",
+			alter:     "alter table t engine=innodb",
+			expectErr: &MultipleAutoIncrementColumnsError{Table: "t"},
+		},
+		{
+			name:      "invalid table definition: two serial columns",
+			from:      "create table t (id serial, id2 serial)",
+			alter:     "alter table t engine=innodb",
+			expectErr: &MultipleAutoIncrementColumnsError{Table: "t"},
+		},
+		{
 			name:  "add primary key",
 			from:  "create table t (id int, i int)",
 			alter: "alter table t add primary key(id)",
