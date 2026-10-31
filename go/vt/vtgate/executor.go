@@ -1723,7 +1723,15 @@ func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSessio
 	case sqlparser.StmtSelect, sqlparser.StmtShow,
 		sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
 		return e.handlePrepare(ctx, safeSession, sql, logStats)
-	case sqlparser.StmtDDL, sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback, sqlparser.StmtSet,
+	case sqlparser.StmtSet:
+		// MySQL permits placeholders in SET and reports their count in the
+		// prepare response, so the count must come from the parsed statement.
+		stmt, err := e.env.Parser().Parse(sql)
+		if err != nil {
+			return nil, 0, err
+		}
+		return nil, countArguments(stmt), nil
+	case sqlparser.StmtDDL, sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback,
 		sqlparser.StmtUse, sqlparser.StmtOther, sqlparser.StmtAnalyze, sqlparser.StmtComment, sqlparser.StmtExplain, sqlparser.StmtFlush, sqlparser.StmtKill:
 		return nil, 0, nil
 	}

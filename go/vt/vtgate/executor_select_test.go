@@ -3304,6 +3304,31 @@ func TestPrepareWithCTE(t *testing.T) {
 	}
 }
 
+// MySQL permits placeholders in SET and reports their count in the prepare
+// response, so the count must come from the statement instead of being zero.
+func TestPrepareSetReportsParamsCount(t *testing.T) {
+	testcases := []struct {
+		sql         string
+		paramsCount uint16
+	}{
+		{sql: "set @@session.sql_select_limit = ?", paramsCount: 1},
+		{sql: "set @uservar = ?", paramsCount: 1},
+		{sql: "set @a = ?, @b = ?", paramsCount: 2},
+		{sql: "set @a = 1", paramsCount: 0},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.sql, func(t *testing.T) {
+			executor, _, _, _, ctx := createExecutorEnv(t)
+			session := &vtgatepb.Session{TargetString: KsTestUnsharded}
+
+			_, paramsCount, err := executorPrepare(ctx, executor, session, tc.sql)
+			require.NoError(t, err)
+			require.Equal(t, tc.paramsCount, paramsCount)
+		})
+	}
+}
+
 // A statement whose first keyword Preview does not recognize but that parses to
 // a type prepare cannot count parameters for (DO discards its expression list)
 // must be rejected rather than reported to the client as a zero-parameter
