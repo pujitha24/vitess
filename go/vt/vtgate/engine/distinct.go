@@ -74,6 +74,13 @@ func (pt *probeTable) hashCodeForRow(inputRow sqltypes.Row) (vthash.Hash, error)
 		if i >= len(inputRow) {
 			return vthash.Hash{}, vterrors.VT13001("index out of range in row when creating the DISTINCT hash code")
 		}
+		if checkCol.Type.Type() == sqltypes.Unknown && checkCol.WsCol != nil {
+			// A value of unknown static type cannot be hashed reliably: every sqltypes
+			// predicate matches Unknown, so text would be hashed as a float and collide.
+			// Use the weight string column the planner added for this case.
+			checkCol = checkCol.SwitchToWeightString()
+			pt.checkCols[i] = checkCol
+		}
 		col := inputRow[checkCol.Col]
 		err := evalengine.NullsafeHashcode128(&hasher, col, checkCol.Type.Collation(), checkCol.Type.Type(), pt.sqlmode, checkCol.Type.Values())
 		if err != nil {

@@ -221,3 +221,26 @@ func TestWeightStringFallBack(t *testing.T) {
 		Type:  evalengine.NewType(sqltypes.VarBinary, collations.CollationBinaryID),
 	}}, distinct.CheckCols, "checkCols should not be updated")
 }
+
+// TestDistinctUnknownTypeUsesWeightString checks that text values whose static
+// type is unknown are deduplicated through the weight string column instead of
+// all being hashed as floats, which used to drop every row but the first non-NULL one.
+func TestDistinctUnknownTypeUsesWeightString(t *testing.T) {
+	offsetOne := 1
+	input := r("x|weightstring(x)",
+		"varchar|varbinary",
+		"zoe|zoe",
+		"NULL|NULL",
+		"p|p",
+		"zoe|zoe")
+
+	distinct := &Distinct{
+		Source:    &fakePrimitive{results: []*sqltypes.Result{input}},
+		CheckCols: []CheckCol{{Col: 0, WsCol: &offsetOne, Type: evalengine.NewUnknownType()}},
+		Truncate:  1,
+	}
+
+	qr, err := distinct.TryExecute(t.Context(), &noopVCursor{}, nil, true)
+	require.NoError(t, err)
+	require.Equal(t, fmt.Sprintf("%v", r("x", "varchar", "zoe", "NULL", "p").Rows), fmt.Sprintf("%v", qr.Rows))
+}
